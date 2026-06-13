@@ -5,36 +5,28 @@ from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
 
-# AGAR UI ANDA BISA MENGAKSES API INI
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Izinkan semua alamat mengakses
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Definisi data apa saja yang harus dikirim dari UI
 
-
-class DataProduk(BaseModel):
+class InputProduk(BaseModel):
     nama: str
-    harga: float
+    harga_idr: float
     stok: int
-    expired_dalam_hari: int
-
-
-@app.get("/")
-def home():
-    return {"status": "AI Food Waste Aktif!"}
+    sisa_hari_expired: int
 
 
 @app.post("/predict")
-def prediksi_api(item: DataProduk):
-    # Memanggil fungsi dari file predict_logic.py
+def predict_api(data: InputProduk):
+    # Mengirim data ke logika AI yang baru
     hasil = hitung_rekomendasi(
-        item.nama,
-        item.harga,
-        item.expired_dalam_hari,
-        item.stok
+        data.nama,
+        data.harga_idr,
+        data.sisa_hari_expired,
+        data.stok
     )
     return hasil

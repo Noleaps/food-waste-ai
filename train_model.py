@@ -3,43 +3,45 @@ from xgboost import XGBRegressor
 import joblib
 import os
 
-# 1. Gunakan file ML
-file_name = 'food_waste_ml_1000.csv'
+file_name = 'food_waste_indonesia_dataset_1000.csv'
 
 if not os.path.exists(file_name):
     print(f"Error: File {file_name} tidak ditemukan!")
 else:
+    # Baca file dengan menghilangkan spasi di nama kolom (agar lebih aman)
     df = pd.read_csv(file_name)
-    print("Dataset berhasil dibaca!")
+    df.columns = df.columns.str.strip()
 
-    # 2. Menentukan Target dan Fitur
-    # Target yang mau diprediksi adalah 'quantity'
+    print("Dataset berhasil dibaca!")
+    print("Daftar kolom yang ditemukan:", df.columns.tolist())
+
+    # Tentukan Target
     target = 'quantity'
 
-    # Kita hanya mengambil kolom yang berisi angka untuk proses belajar
-    # Kita buang 'risk_level' dan 'recommended_action' karena itu berbentuk teks
-    fitur_angka = df.select_dtypes(include=['number']).columns.tolist()
+    # Pilih kriteria (Fitur) - Sesuaikan dengan nama yang muncul di daftar tadi
+    # Jika di daftar namanya bukan 'storage_temperature', ganti tulisan di bawah ini
+    features = [
+        'price_IDR',
+        'expiry_days',
+        'storage_temperature_C',
+        'day_of_week',
+        'is_weekend',
+        'predicted_demand'
+    ]
 
-    if target in fitur_angka:
-        fitur_angka.remove(target)  # Buang target dari daftar fitur
+    try:
+        X = df[features]
+        y = df[target]
 
-    X = df[fitur_angka]
-    y = df[target]
+        print("AI sedang mempelajari data...")
+        model = XGBRegressor(n_estimators=100)
+        model.fit(X, y)
 
-    print(f"Menggunakan fitur: {fitur_angka}")
-    print(f"Target: {target}")
-
-    # 3. Membuat "Mesin" AI
-    model = XGBRegressor(n_estimators=100, learning_rate=0.1)
-
-    # 4. Proses Belajar
-    print("AI sedang belajar dari data...")
-    model.fit(X, y)
-
-    # 5. Simpan Model dan daftar fitur
-    joblib.dump(model, 'model.pkl')
-    joblib.dump(fitur_angka, 'features.pkl')
-
-    print("-----------------------------------------")
-    print("Berhasil! File 'model.pkl' dan 'features.pkl' telah dibuat.")
-    print("Sekarang kita punya 'otak' AI yang siap memprediksi penjualan.")
+        joblib.dump(model, 'model.pkl')
+        joblib.dump(features, 'features.pkl')
+        print("-----------------------------------------")
+        print("Berhasil! Otak AI Indonesia siap digunakan.")
+    except KeyError as e:
+        print(f"\nERROR: Kolom {e} tidak ditemukan!")
+        print(
+            "Pastikan nama kolom di dalam kode 'features' sama dengan daftar kolom di atas.")
