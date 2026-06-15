@@ -1,50 +1,66 @@
 import joblib
 import pandas as pd
 
-# Muat model dan fitur yang baru saja Anda buat
 model = joblib.load('model.pkl')
 features = joblib.load('features.pkl')
 
 
 def hitung_rekomendasi(nama, harga_idr, sisa_hari_expired, stok_saat_ini):
-    # MENYIAPKAN DATA SESUAI HASIL TRAINING
-    # Perhatikan: Nama kolom harus persis 'storage_temperature_C'
+    # 1. AI Memprediksi Penjualan
     data_input = pd.DataFrame([{
         'price_IDR': harga_idr,
         'expiry_days': sisa_hari_expired,
-        'storage_temperature_C': 24,  # Suhu rata-rata
-        'day_of_week': 1,            # Asumsi hari Senin
-        'is_weekend': 0,             # Bukan akhir pekan
-        'predicted_demand': 50       # Permintaan rata-rata
+        'storage_temperature_C': 24,
+        'day_of_week': 1,
+        'is_weekend': 0,
+        'predicted_demand': 50
     }])
 
-    # Pastikan urutan kolom sesuai dengan features.pkl
     data_input = data_input[features]
-
-    # AI Memprediksi berapa yang akan terjual (quantity)
     prediksi_terjual = model.predict(data_input)[0]
 
-    # --- LOGIKA PENENTUAN RISIKO ---
-    potensi_sisa = stok_saat_ini - prediksi_terjual
+    # --- LOGIKA FUZZY DISCOUNT (GRADUAL) ---
 
-    risk_level = "Low Risk"
-    diskon = 0
-    pesan = "Kondisi aman, tidak butuh diskon."
+    # A. Hitung Diskon Berdasarkan Hari (Maksimal 70% di hari ke-1, 0% di hari ke-10)
+    if sisa_hari_expired >= 10:
+        diskon_hari = 0
+    elif sisa_hari_expired <= 0:
+        diskon_hari = 80  # Sudah expired / Hari-H
+    else:
+        # Rumus: Semakin kecil hari, semakin besar diskon secara linear
+        diskon_hari = (10 - sisa_hari_expired) * 7.5  # Gradasi per hari 7.5%
 
-    # Aturan berdasarkan Sisa Hari dan Stok
-    if sisa_hari_expired <= 3:
+    # B. Faktor Pengali Berdasarkan Stok (Waste Risk)
+    # Jika stok jauh lebih banyak dari prediksi jual, tambahkan diskon extra
+    rasio_sisa = (stok_saat_ini - prediksi_terjual) / (stok_saat_ini + 1)
+    # Tambahan maksimal 15% jika barang numpuk
+    extra_diskon_stok = max(0, rasio_sisa * 15)
+
+    # C. Total Diskon Akhir
+    total_diskon = round(diskon_hari + extra_diskon_stok)
+
+    # Batasi diskon di angka yang masuk akal (5% - 80%)
+    if total_diskon < 5:
+        total_diskon = 0
+    elif total_diskon > 80:
+        total_diskon = 80
+
+    # --- PENENTUAN LEVEL RISIKO ---
+    if sisa_hari_expired <= 3 or total_diskon >= 50:
         risk_level = "High Risk"
-        diskon = 50
-        pesan = "Barang kritis! Segera diskon 50% sebelum kadaluarsa."
-    elif sisa_hari_expired <= 7 or potensi_sisa > (0.3 * stok_saat_ini):
+        pesan = f"Risiko tinggi! Stok sisa banyak & expired dekat. Diskon {total_diskon}% segera."
+    elif sisa_hari_expired <= 7 or total_diskon >= 20:
         risk_level = "Medium Risk"
-        diskon = 20
-        pesan = "Stok berisiko menumpuk. Berikan diskon promosi 20%."
+        pesan = f"Risiko sedang. Diskon gradual {total_diskon}% untuk mempercepat penjualan."
+    else:
+        risk_level = "Low Risk"
+        pesan = "Kondisi aman. Belum perlu diskon besar."
 
     return {
         "produk": nama,
         "prediksi_jual_qty": round(float(prediksi_terjual), 2),
         "risiko": risk_level,
-        "diskon_rekomendasi": f"{diskon}%",
+        # Hasilnya sekarang dinamis (misal 38%)
+        "diskon_rekomendasi": f"{total_diskon}%",
         "catatan": pesan
     }

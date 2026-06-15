@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Supermarket Food Waste Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .bg-gradient-food { background: linear-gradient(135deg, #10b981 0%, #3b82f6 100%); }
+        .glass-card { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border-radius: 1rem; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen font-sans">
+
+    <!-- Navigation Bar -->
+    <nav class="bg-gradient-food p-4 shadow-lg">
+        <div class="container mx-auto flex justify-between items-center text-white">
+            <h1 class="text-xl font-bold flex items-center gap-2">
+                <i class="fas fa-leaf text-2xl"></i> Food Waste Tracker AI
+            </h1>
+            <span class="text-sm bg-white/20 px-3 py-1 rounded-full border border-white/30">Backend Active</span>
+        </div>
+    </nav>
+
+    <div class="container mx-auto py-10 px-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-10">
+            
+            <!-- Left Side: Form Input -->
+            <div class="glass-card p-8">
+                <h2 class="text-2xl font-semibold mb-6 text-gray-800 border-b pb-2">Analisis Produk Baru</h2>
+                
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-600 mb-1">Nama Produk</label>
+                        <input type="text" id="nama" placeholder="Contoh: Ayam, Tauge, Susu" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none transition">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-600 mb-1">Harga Satuan (IDR)</label>
+                        <input type="number" id="harga" placeholder="15000" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none transition">
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-600 mb-1">Stok Saat Ini</label>
+                            <input type="number" id="stok" placeholder="10" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none transition">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-600 mb-1">Sisa Hari Expired</label>
+                            <input type="number" id="expired" placeholder="5" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none transition">
+                        </div>
+                    </div>
+
+                    <button onclick="cekRisiko()" id="btn-submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-lg mt-4 transition duration-300 shadow-md flex justify-center items-center gap-2">
+                        <i class="fas fa-magic"></i> Cek Risiko AI
+                    </button>
+                </div>
+            </div>
+
+            <!-- Right Side: Analysis Results -->
+            <div class="glass-card p-8 flex flex-col justify-center items-center text-center">
+                <div id="welcome-state">
+                    <i class="fas fa-chart-line text-6xl text-gray-200 mb-4"></i>
+                    <p class="text-gray-400">Masukkan data produk di sebelah kiri untuk memulai analisis AI</p>
+                </div>
+
+                <div id="loading-state" class="hidden">
+                    <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mb-4"></div>
+                    <p class="text-gray-500">AI sedang memprediksi penjualan...</p>
+                </div>
+
+                <div id="result-state" class="hidden w-full">
+                    <h3 class="text-xl font-bold text-gray-800 mb-2">Hasil Prediksi & Analisis</h3>
+                    
+                    <!-- Risk Badge -->
+                    <div id="risk-badge" class="inline-block px-6 py-2 rounded-full text-white font-bold text-lg mb-6 shadow-sm">
+                        MEDIUM RISK
+                    </div>
+
+                    <div class="grid grid-cols-1 gap-4 text-left">
+                        <div class="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                            <span class="text-xs uppercase text-gray-400 block">Prediksi Unit Terjual</span>
+                            <span id="res-terjual" class="text-xl font-bold text-gray-700">0.00</span>
+                        </div>
+                        <div class="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                            <span class="text-xs uppercase text-gray-400 block">Rekomendasi Diskon</span>
+                            <span id="res-diskon" class="text-xl font-bold text-emerald-600">0%</span>
+                        </div>
+                        <div class="bg-emerald-50 p-4 rounded-lg border border-emerald-100">
+                            <span class="text-xs uppercase text-emerald-700 block">Catatan AI</span>
+                            <p id="res-pesan" class="text-emerald-900 italic"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        async function cekRisiko() {
+            const nama = document.getElementById("nama").value;
+            const harga = document.getElementById("harga").value;
+            const stok = document.getElementById("stok").value;
+            const expired = document.getElementById("expired").value;
+            const btn = document.getElementById("btn-submit");
+
+            if(!nama || !harga || !stok || !expired) {
+                alert("Mohon isi semua data!");
+                return;
+            }
+
+            // UI State management
+            document.getElementById("welcome-state").classList.add("hidden");
+            document.getElementById("result-state").classList.add("hidden");
+            document.getElementById("loading-state").classList.remove("hidden");
+            btn.disabled = true;
+
+            try {
+                const response = await fetch('https://food-waste-ai-625899891226.asia-southeast1.run.app/predict', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        nama: nama,
+                        harga_idr: parseFloat(harga),
+                        stok: parseInt(stok),
+                        sisa_hari_expired: parseInt(expired)
+                    })
+                });
+
+                const data = await response.json();
+
+                // Update UI dengan hasil AI
+                document.getElementById("res-terjual").innerText = data.prediksi_jual_qty + " unit";
+                document.getElementById("res-diskon").innerText = data.diskon_rekomendasi;
+                document.getElementById("res-pesan").innerText = `"${data.catatan}"`;
+                
+                const badge = document.getElementById("risk-badge");
+                badge.innerText = data.risiko;
+
+                // Atur Warna Berdasarkan Risiko
+                if(data.risiko === "High Risk") {
+                    badge.className = "inline-block px-6 py-2 rounded-full text-white font-bold text-lg mb-6 shadow-sm bg-red-600";
+                } else if(data.risiko === "Medium Risk") {
+                    badge.className = "inline-block px-6 py-2 rounded-full text-white font-bold text-lg mb-6 shadow-sm bg-orange-500";
+                } else {
+                    badge.className = "inline-block px-6 py-2 rounded-full text-white font-bold text-lg mb-6 shadow-sm bg-emerald-600";
+                }
+
+                document.getElementById("loading-state").classList.add("hidden");
+                document.getElementById("result-state").classList.remove("hidden");
+
+            } catch (error) {
+                alert("Gagal menghubungi AI. Pastikan Backend aktif.");
+                document.getElementById("welcome-state").classList.remove("hidden");
+                document.getElementById("loading-state").classList.add("hidden");
+            } finally {
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
