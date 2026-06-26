@@ -16,18 +16,18 @@ else:
     print("Daftar kolom yang ditemukan:", df.columns.tolist())
 
     # Tentukan Target
-    target = 'quantity'
+    target = 'predicted_demand'
 
     # Pilih kriteria (Fitur) - Sesuaikan dengan nama yang muncul di daftar tadi
-    # Jika di daftar namanya bukan 'storage_temperature', ganti tulisan di bawah ini
     features = [
+        'quantity',  # Sekarang stok (quantity) jadi kriteria/input
         'price_IDR',
         'expiry_days',
         'storage_temperature_C',
         'day_of_week',
-        'is_weekend',
-        'predicted_demand'
+        'is_weekend'
     ]
+#
 
     try:
         X = df[features]
