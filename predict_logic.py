@@ -1,68 +1,78 @@
 import joblib
 import pandas as pd
+from datetime import datetime
 
-# Memuat model dan daftar fitur pendukung
+# 1. MEMUAT MODEL DAN FITUR
 model = joblib.load('model.pkl')
 features = joblib.load('features.pkl')
 
 
 def hitung_rekomendasi(nama, harga_idr, sisa_hari_expired, stok_saat_ini):
-    # 1. Menyiapkan data untuk dikirim ke AI
+    # --- LOGIKA HARI DINAMIS ---
+    # Mendapatkan hari ini secara otomatis (0=Senin, 1=Selasa, ..., 5=Sabtu, 6=Minggu)
+    now = datetime.now()
+    hari_angka = now.weekday()
+
+    # AI Studio/Bolt biasanya menyetel tahun 2026 di screenshot Anda,
+    # namun kode ini akan mengambil waktu asli komputer server saat ini.
+
+    # Menentukan is_weekend (1 jika Sabtu/Minggu, 0 jika Senin-Jumat)
+    is_weekend = 1 if hari_angka >= 5 else 0
+
+    # 2. MENYIAPKAN INPUT UNTUK AI
     data_input = pd.DataFrame([{
         'quantity': stok_saat_ini,
         'price_IDR': harga_idr,
         'expiry_days': sisa_hari_expired,
-        'storage_temperature_C': 24,  # Suhu standar
-        'day_of_week': 1,            # Asumsi Senin
-        'is_weekend': 0
+        'storage_temperature_C': 24,  # Suhu rata-rata
+        'day_of_week': hari_angka,   # DINAMIS mengikuti kalender
+        'is_weekend': is_weekend     # DINAMIS mengikuti kalender
     }])
 
-    # Menyamakan urutan kolom sesuai keinginan AI
+    # Menyesuaikan urutan kolom sesuai features.pkl
     data_input = data_input[features]
 
-    # 2. AI menebak DEMAND (Permintaan Pembeli)
+    # 3. AI MENEBAK DEMAND (PERMINTAAN)
     raw_prediksi = model.predict(data_input)[0]
+    prediksi_demand = max(0, raw_prediksi)  # Pastikan tidak minus
 
-    # PERBAIKAN: Memastikan angka permintaan tidak minus (Minimal 0)
-    prediksi_demand = max(0, raw_prediksi)
-
-    # 3. MENGHITUNG RISIKO (Logic yang lebih cerdas)
-    # Menghitung selisih stok dengan permintaan
+    # 4. ANALISIS WASTE (STOK VS DEMAND)
+    # Jika stok 100 tapi demand 120, maka potensi_waste = 0 (barang ludes)
     potensi_waste = max(0, stok_saat_ini - prediksi_demand)
     rasio_waste = potensi_waste / (stok_saat_ini + 0.1)
 
-    risk = "Low Risk"
-    # Barang High Risk jika: sudah mau expired (3 hari)
-    # ATAU stok sangat menumpuk tapi expired sudah mulai dekat (dibawah 10 hari)
-    if sisa_hari_expired <= 3:
-        risk = "High Risk"
-    elif rasio_waste > 0.6 and sisa_hari_expired <= 10:
-        risk = "High Risk"
-    elif sisa_hari_expired <= 7 or rasio_waste > 0.3:
-        risk = "Medium Risk"
-    else:
-        risk = "Low Risk"
-
-    # 4. LOGIKA DISKON FUZZY (Bertahap)
+    # 5. DYNAMIC RISK & FUZZY DISCOUNT
     total_diskon = 0
-    if risk != "Low Risk":
-        # Diskon bertambah seiring berkurangnya hari (Maksimal di hari ke-0)
-        # Kami menggunakan rentang 14 hari untuk mulai diskon halus
-        diskon_hari = max(0, (14 - sisa_hari_expired) * 5)
+    risk = "Low Risk"
 
-        # Tambahan diskon jika rasio barang sisa banyak
-        diskon_stok = rasio_waste * 15
+    # Aturan A: Jika barang ludes terjual (Demand >= Stok), risiko rendah, diskon 0%
+    if potensi_waste == 0 and sisa_hari_expired > 3:
+        risk = "Low Risk"
+        total_diskon = 0
+        catatan = f"Permintaan tinggi ({round(prediksi_demand)} unit). Stok akan habis di harga normal."
 
-        total_diskon = round(diskon_hari + diskon_stok)
-
-    # Batasi diskon maksimal 85% dan minimal 0%
-    total_diskon = min(max(total_diskon, 0), 85)
-
-    # 5. MENYUSUN PESAN REKOMENDASI
-    if risk == "Low Risk":
-        catatan = f"Permintaan stabil. AI memprediksi {round(prediksi_demand)} unit akan terjual."
+    # Aturan B: Jika stok berisiko sisa, hitung diskon gradual
     else:
-        catatan = f"Permintaan rendah ({round(prediksi_demand)} unit). Disarankan diskon untuk menghabiskan sisa {round(potensi_waste)} unit."
+        # Penentuan Risiko
+        if sisa_hari_expired <= 3:
+            risk = "High Risk"
+        elif rasio_waste > 0.6 and sisa_hari_expired <= 10:
+            risk = "High Risk"
+        elif sisa_hari_expired <= 7 or rasio_waste > 0.3:
+            risk = "Medium Risk"
+        else:
+            risk = "Low Risk"
+
+        # Perhitungan Diskon Hanya jika berisiko sisa atau sudah mau expired
+        if sisa_hari_expired <= 14 or rasio_waste > 0.1:
+            diskon_hari = max(0, (14 - sisa_hari_expired) * 5)
+            diskon_stok = rasio_waste * 15
+            total_diskon = round(diskon_hari + diskon_stok)
+
+        catatan = f"Permintaan diperkirakan {round(prediksi_demand)} unit. Diskon {total_diskon}% untuk menjaga stok."
+
+    # Final touch: Batasi diskon
+    total_diskon = min(max(total_diskon, 0), 85)
 
     return {
         "produk": nama,
