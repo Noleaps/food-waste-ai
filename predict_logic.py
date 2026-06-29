@@ -41,7 +41,7 @@ def hitung_rekomendasi(nama, harga_idr, sisa_hari_expired, stok_saat_ini):
     data_input = data_input[features]
     ml_prediction = model.predict(data_input)[0]
 
-    # --- LOGIKA HYBRID (ANTI-ZERO) ---
+    # LOGIKA HYBRID (ANTI-ZERO)
     # Jika ML memberikan angka di bawah 10 (tidak logis untuk retail),
     # kita gunakan Baseline Heuristic berdasarkan rata-rata dataset kamu (40-100 unit)
     if ml_prediction < 10:
